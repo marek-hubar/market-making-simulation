@@ -1,0 +1,25 @@
+{
+  "simulation": {
+    "mu":               0.0,
+    "sigma":            2.0,
+    "initial_price":    100.0,
+    "T":                1.0,
+    "dt":               0.001,
+    "num_paths":        1000,
+    "seed":             23,
+    "initial_cash":     1000.0,
+    "initial_inventory": 0
+  },
+  "strategy": {
+    "type":  "avellaneda_stoikov",
+    "gamma": 0.1,
+    "k":     1.5,
+    "A":     140.0
+  },
+  "inventory_constraint": {
+    "max_inventory": 50
+  },
+  "output": {
+    "dir": "data/"
+  }
+}

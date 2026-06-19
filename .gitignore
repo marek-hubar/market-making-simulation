@@ -1,0 +1,24 @@
+# Build artefacts
+build/
+cmake-build-*/
+
+# Generated simulation output (can be large)
+data/output/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Report build
+*.pdf

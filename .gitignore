@@ -22,3 +22,6 @@ venv/
 
 # Report build
 *.pdf
+
+# Generated data
+data/

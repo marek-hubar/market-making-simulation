@@ -42,44 +42,6 @@ cd build && ctest --output-on-failure
 ./build/tests/tests -v
 ```
 
-## Project structure
-
-```
-avellaneda-stoikov/
-├── CMakeLists.txt          # root build; fetches nlohmann/json + Catch2
-├── config/
-│   ├── default.json        # baseline parameters
-│   └── experiments/        # per-experiment overrides (Phase 6)
-├── src/
-│   ├── main.cpp
-│   └── core/
-│       ├── Config.hpp           # ← Phase 1 (this phase)
-│       ├── PriceProcess.hpp/.cpp    # Phase 2
-│       ├── OrderArrivalModel.hpp/.cpp
-│       ├── Portfolio.hpp
-│       └── Simulator.hpp/.cpp
-│   ├── strategies/              # Phase 3
-│   │   ├── Strategy.hpp         # abstract base
-│   │   ├── AvellanedaStoikov.hpp/.cpp
-│   │   ├── FixedSpread.hpp/.cpp
-│   │   └── InventoryConstrained.hpp/.cpp
-│   └── utils/                   # Phase 4
-│       ├── Random.hpp
-│       ├── CSVWriter.hpp/.cpp
-│       └── Statistics.hpp
-├── tests/
-│   ├── CMakeLists.txt
-│   ├── test_config.cpp          # ← Phase 1
-│   ├── test_price_process.cpp   # Phase 2
-│   ├── test_strategy.cpp        # Phase 3
-│   └── test_simulator.cpp       # Phase 4
-├── python/                      # Phase 5
-│   ├── requirements.txt
-│   ├── analysis/
-│   └── experiments/
-└── data/output/                 # generated, gitignored
-```
-
 ## Key formulas (Avellaneda & Stoikov 2008)
 
 ```

@@ -2,13 +2,7 @@
 #include <string>
 #include "core/Config.hpp"
 #include "core/Simulator.hpp"
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Phase 1 main
-//
-// Currently only validates the config pipeline end-to-end.
-// Each subsequent phase will add real simulation logic here.
-// ─────────────────────────────────────────────────────────────────────────────
+#include "core/Statistics.hpp"
 
 int main(int argc, char* argv[]) {
 
@@ -52,30 +46,50 @@ int main(int argc, char* argv[]) {
     std::cout << "    output_dir    = " << cfg.output_dir      << "\n";
     std::cout << "─────────────────────────────────────────\n";
 
+    auto extract_pnls = [](const std::vector<PathSummary>& paths) {
+        std::vector<double> v;
+        v.reserve(paths.size());
+        for (const auto& p : paths) v.push_back(p.terminal_pnl);
+        return v;
+    };
+
     Simulator simulator(cfg);
 
-    AvellanedaStoikovAgent agent_AS(cfg);
-    simulator.run_all(agent_AS);
-    simulator.write_results_to_csv("data/results_AS.csv");
+    // ── Strategy 1: Avellaneda-Stoikov ────────────────────────────────────────
+    {
+        AvellanedaStoikovAgent agent(cfg);
+        auto results = simulator.run_all(agent);
+        auto stats   = aggregate_paths(results);
+        print_stats_summary(stats, "Avellaneda-Stoikov");
+        write_stats_json("data/results_AS.json", stats, "Avellaneda-Stoikov",
+                         extract_pnls(results));
+    }
 
-    double optimal_fixed_half_spread = 1 / cfg.gamma * std::log(1 + cfg.gamma / cfg.k) + cfg.gamma * cfg.sigma * cfg.sigma * cfg.T * 0.25;
-    FixedSpreadAgent agent_FS(optimal_fixed_half_spread);
-    simulator.run_all(agent_FS);
-    simulator.write_results_to_csv("data/results_FS.csv");
+    // ── Strategy 2: Fixed Spread ──────────────────────────────────────────────
+    {
+        double optimal_fixed_half_spread =
+            1.0 / cfg.gamma * std::log(1.0 + cfg.gamma / cfg.k)
+            + cfg.gamma * cfg.sigma * cfg.sigma * cfg.T * 0.25;
+        FixedSpreadAgent agent(optimal_fixed_half_spread);
+        auto results = simulator.run_all(agent);
+        auto stats   = aggregate_paths(results);
+        print_stats_summary(stats, "FixedSpread");
+        write_stats_json("data/results_FS.json", stats, "FixedSpread",
+                         extract_pnls(results));
+    }
 
-    double tau = 1.0;
-    optimal_fixed_half_spread = 1 / cfg.gamma * std::log(1 + cfg.gamma / cfg.k);
-    double linear_skew = cfg.gamma * cfg.sigma * cfg.sigma * tau;
-    LinearSkewAgent agent_LS(optimal_fixed_half_spread, linear_skew);
-    simulator.run_all(agent_LS);
-    simulator.write_results_to_csv("data/results_LS.csv");
-
-    std::cout << "─────────────────────────────────────────\n";
-    std::cout << "           Simulation Results \n";
-    std::cout << "─────────────────────────────────────────\n";
-    std::cout << "  paths simulated : " << cfg.num_paths << "\n\n";
-
-
+    // ── Strategy 3: LinearSkew ────────────────────────────────────────────────
+    {
+        double tau = 1.0;
+        double base_spread = 1.0 / cfg.gamma * std::log(1.0 + cfg.gamma / cfg.k);
+        double linear_skew = cfg.gamma * cfg.sigma * cfg.sigma * tau;
+        LinearSkewAgent agent(base_spread, linear_skew);
+        auto results = simulator.run_all(agent);
+        auto stats   = aggregate_paths(results);
+        print_stats_summary(stats, "LinearSkew");
+        write_stats_json("data/results_LS.json", stats, "LinearSkew",
+                         extract_pnls(results));
+    }
 
     return 0;
 }

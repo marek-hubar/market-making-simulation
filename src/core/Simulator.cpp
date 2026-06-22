@@ -1,5 +1,4 @@
 #include "Simulator.hpp"
-#include <cmath>
 #include <pcg_random.hpp>
 
 Simulator::Simulator(const Config& config)
@@ -23,47 +22,33 @@ PathSummary Simulator::run_path(unsigned long seed, Agent& agent) {
         double mid = price_process_.get_mid();
         int inv = portfolio_.get_inventory();
 
-        Spreads spreads = agent.compute_spreads(inv, portfolio_.get_cash(),
+        Spreads spreads = agent.compute_spreads(inv,
                                                 config_.T - current_time, mid);
         FillResult fill_res = arrival_model_.simulate_fills(spreads.bid, spreads.ask, rng);
 
         if (fill_res.bid_filled) {
-            portfolio_.add_fill(+1, mid - spreads.bid);
+            portfolio_.add_fill(+1, spreads.bid);
         }
         if (fill_res.ask_filled) {
-            portfolio_.add_fill(-1, mid + spreads.ask);
+            portfolio_.add_fill(-1, spreads.ask);
         }
 
         double total_spread = spreads.bid + spreads.ask;
         stats_.record_step(current_time, mid,
                            portfolio_.get_inventory(),
-                           portfolio_.get_mtm_pnl(mid),
+                           portfolio_.get_pnl(),
                            total_spread, fill_res);
 
+        double old_mid = mid;
         price_process_.step(rng);
         current_time += config_.dt;
+        portfolio_.apply_price_change(price_process_.get_mid(), old_mid);
     }
 
-    int inv_before_liq = portfolio_.get_inventory();
     double final_mid = price_process_.get_mid();
-    double slippage = 0.0;
 
-    if (inv_before_liq != 0) {
-        double baseline_half_spread = 1.0 / config_.gamma
-                                      * std::log(1.0 + config_.gamma / config_.k);
-        double eta = 0.0001;
-        slippage = baseline_half_spread + (eta * std::abs(inv_before_liq));
-
-        if (inv_before_liq > 0) {
-            portfolio_.add_fill(-inv_before_liq, final_mid - slippage);
-        } else {
-            portfolio_.add_fill(-inv_before_liq, final_mid + slippage);
-        }
-    }
-
-    return stats_.finalize(inv_before_liq, final_mid,
-                           portfolio_.get_cash(),
-                           portfolio_.get_mtm_pnl(final_mid));
+    return stats_.finalize(portfolio_.get_inventory(), final_mid,
+                           portfolio_.get_pnl());
 }
 
 PathSummary Simulator::run(Agent& agent) {

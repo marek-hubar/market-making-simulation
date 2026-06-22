@@ -39,7 +39,6 @@ struct OnlineStats {
 // ─────────────────────────────────────────────────────────────────────────────
 struct PathSummary {
     double terminal_pnl         = 0.0;
-    double terminal_cash        = 0.0;
     int    terminal_inventory   = 0;
     double terminal_midprice    = 0.0;
 
@@ -114,11 +113,9 @@ public:
     }
 
     [[nodiscard]] PathSummary finalize(int terminal_inv, double terminal_mid,
-                                       double terminal_cash,
                                        double terminal_pnl) const {
         PathSummary ps;
         ps.terminal_pnl           = terminal_pnl;
-        ps.terminal_cash          = terminal_cash;
         ps.terminal_inventory     = terminal_inv;
         ps.terminal_midprice      = terminal_mid;
 
@@ -205,7 +202,6 @@ struct SummaryStats {
 // ─────────────────────────────────────────────────────────────────────────────
 struct CrossPathStats {
     SummaryStats terminal_pnl;
-    SummaryStats terminal_cash;
     SummaryStats terminal_inventory;
     SummaryStats terminal_midprice;
     SummaryStats mean_inventory;
@@ -248,7 +244,6 @@ inline CrossPathStats aggregate_paths(const std::vector<PathSummary>& paths) {
     };
 
     cps.terminal_pnl            = extract_d(&PathSummary::terminal_pnl);
-    cps.terminal_cash           = extract_d(&PathSummary::terminal_cash);
     cps.terminal_inventory      = extract_i(&PathSummary::terminal_inventory);
     cps.terminal_midprice       = extract_d(&PathSummary::terminal_midprice);
     cps.mean_inventory          = extract_d(&PathSummary::mean_inventory);
@@ -291,7 +286,7 @@ inline CrossPathStats aggregate_paths(const std::vector<PathSummary>& paths) {
 inline void write_stats_json(const std::string& filepath,
                              const CrossPathStats& s,
                              const std::string& strategy_name,
-                             const std::vector<double>& terminal_pnl_values = {}) {
+                             const std::vector<PathSummary>& paths = {}) {
     std::ofstream f(filepath);
     if (!f.is_open()) return;
 
@@ -312,7 +307,6 @@ inline void write_stats_json(const std::string& filepath,
       << "  \"n_paths\": " << s.terminal_pnl.count << ",\n\n";
 
     w("terminal_pnl",            s.terminal_pnl);
-    w("terminal_cash",           s.terminal_cash);
     w("terminal_inventory",      s.terminal_inventory);
     w("terminal_midprice",       s.terminal_midprice);
     w("mean_inventory",          s.mean_inventory);
@@ -333,12 +327,26 @@ inline void write_stats_json(const std::string& filepath,
       << "  \"sharpe_ci95\": ["      << s.sharpe_ci95_lower
                                     << ", " << s.sharpe_ci95_upper << "]";
 
-    if (!terminal_pnl_values.empty()) {
+    if (!paths.empty()) {
         f << ",\n";
         f << "  \"terminal_pnl_values\": [";
-        for (std::size_t i = 0; i < terminal_pnl_values.size(); ++i) {
+        for (std::size_t i = 0; i < paths.size(); ++i) {
             if (i > 0) f << ", ";
-            f << terminal_pnl_values[i];
+            f << paths[i].terminal_pnl;
+        }
+        f << "],\n";
+
+        f << "  \"mean_abs_inventory_values\": [";
+        for (std::size_t i = 0; i < paths.size(); ++i) {
+            if (i > 0) f << ", ";
+            f << paths[i].mean_abs_inventory;
+        }
+        f << "],\n";
+
+        f << "  \"max_abs_inventory_values\": [";
+        for (std::size_t i = 0; i < paths.size(); ++i) {
+            if (i > 0) f << ", ";
+            f << paths[i].max_abs_inventory;
         }
         f << "]";
     }
@@ -365,7 +373,6 @@ inline void print_stats_summary(const CrossPathStats& s,
     };
 
     row("terminal_pnl",            s.terminal_pnl);
-    row("terminal_cash",           s.terminal_cash);
     row("terminal_inventory",      s.terminal_inventory);
     row("mean_inventory",          s.mean_inventory);
     row("mean_abs_inventory",      s.mean_abs_inventory);

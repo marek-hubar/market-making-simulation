@@ -52,7 +52,6 @@ struct Config {
     // ── Inventory constraint (InvConstrained strategy only) ───────────────────
     int max_inventory = 50;  // hard position limit in [+/- max_inventory]
 
-    double initial_cash = 1000.0;
     int initial_inventory = 0.0;
 
 
@@ -90,7 +89,6 @@ struct Config {
         require(num_paths         > 0,   "num_paths must be positive");
         require(max_inventory     > 0,"max_inventory must be positive");
         require(initial_price     > 0.0, "initial_price must be positive");
-        require(initial_cash      >= 0.0, "initial_cash must be non-negative");
         require(initial_inventory >= 0, "initial_inventory must be non-negative");
 
         // Sanity check: fill probability per step should be < 1 at a spread
@@ -119,7 +117,6 @@ struct Config {
             c.dt                = s.value("dt",            c.dt);
             c.num_paths         = s.value("num_paths",     c.num_paths);
             c.seed              = s.value("seed",          c.seed);
-            c.initial_cash      = s.value("initial_cash",      c.initial_cash);
             c.initial_inventory = s.value("initial_inventory", c.initial_inventory);
         }
 

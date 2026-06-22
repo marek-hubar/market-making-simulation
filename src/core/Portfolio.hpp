@@ -5,24 +5,24 @@ class Portfolio {
 private:
     const Config& config_;
     int q_;
-    double cash_;
+    double cumulative_pnl_;
 public:
-    // Portfolio() : q_(0), cash_(0.0) {}
-    Portfolio(const Config& config) : config_(config), q_(config.initial_inventory), cash_(config.initial_cash) {}
+    Portfolio(const Config& config)
+        : config_(config), q_(config.initial_inventory), cumulative_pnl_(0.0) {}
 
     [[nodiscard]] int get_inventory() const { return q_; }
-    [[nodiscard]] double get_cash() const { return cash_; }
-    [[nodiscard]] double get_total_wealth(double current_mid) const { return cash_ + q_ * current_mid; }
-    [[nodiscard]] double get_mtm_pnl(double current_mid) const { return get_total_wealth(current_mid) - config_.initial_cash - config_.initial_inventory * config_.initial_price; }
+    [[nodiscard]] double get_pnl() const { return cumulative_pnl_; }
 
-    // The quantity is signed, i.e. negative for sell and positive for buy
-    void add_fill(int quantity, double price) {
+    void add_fill(int quantity, double quote_spread) {
+        cumulative_pnl_ += static_cast<double>(std::abs(quantity)) * quote_spread;
         q_ += quantity;
-        cash_ -= quantity * price;
     }
 
-    void reset() { q_ = config_.initial_inventory; cash_ = config_.initial_cash; }
+    void apply_price_change(double new_mid, double old_mid) {
+        cumulative_pnl_ += static_cast<double>(q_) * (new_mid - old_mid);
+    }
 
-    double get_cash() { return cash_; }
+    void reset() { q_ = config_.initial_inventory; cumulative_pnl_ = 0.0; }
+
     int get_inventory() { return q_; }
 };

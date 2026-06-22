@@ -17,7 +17,6 @@ AvellanedaStoikovAgent::AvellanedaStoikovAgent(const Config& config)
 
 Spreads AvellanedaStoikovAgent::compute_spreads(
     int current_inventory, 
-    double current_cash, 
     double time_to_horizon, 
     double mid_price
 ) {

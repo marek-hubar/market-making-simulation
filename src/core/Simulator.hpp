@@ -17,7 +17,6 @@ private:
     PathSummary run_path(unsigned long seed, Agent& agent);
 
 public:
-    double get_mtm_pnl() { return portfolio_.get_mtm_pnl(price_process_.get_mid()); }
     Simulator(const Config& config);
     PathSummary run(Agent& agent);
     std::vector<PathSummary> run_all(Agent& agent);

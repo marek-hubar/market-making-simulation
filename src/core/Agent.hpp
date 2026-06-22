@@ -10,10 +10,8 @@ class Agent {
 public:
     virtual ~Agent() = default;
     
-    // Pure virtual function declaration
     [[nodiscard]] virtual Spreads compute_spreads(
         int current_inventory, 
-        double current_cash, 
         double time_to_horizon, 
         double mid_price
     ) = 0;
@@ -27,13 +25,10 @@ private:
     double kappa_term_;
 
 public:
-    // Pass config as const reference to prevent accidental modification
     explicit AvellanedaStoikovAgent(const Config& config);
 
-    // EXACT match: name, parameters, and const/noexcept attributes if any
     [[nodiscard]] Spreads compute_spreads(
         int current_inventory, 
-        double current_cash, 
         double time_to_horizon, 
         double mid_price
     ) override;
@@ -46,7 +41,6 @@ public:
     explicit FixedSpreadAgent(double spread) : spread_(spread) {};
     [[nodiscard]] Spreads compute_spreads(
         int /*current_inventory*/, 
-        double /*current_cash*/, 
         double /*time_to_horizon*/, 
         double /*mid_price*/
     ) override {
@@ -62,7 +56,6 @@ public:
     explicit LinearSkewAgent(double spread, double skew) : spread_(spread), skew_(skew) {};
     [[nodiscard]] Spreads compute_spreads(
         int current_inventory, 
-        double /*current_cash*/, 
         double /*time_to_horizon*/, 
         double /*mid_price*/
     ) override {

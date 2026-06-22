@@ -1,112 +1,315 @@
-import polars as pl
+import json
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import PathPatch
 import seaborn as sns
 
-if __name__ == "__main__":
-    sns.set_theme(style="whitegrid", palette="muted", font_scale=1.1)
+from pathlib import Path
 
-    df = pl.read_csv("data/results.csv")
+def load_results(path: str) -> dict:
+    with open(path) as f:
+        return json.load(f)
 
-    n_paths = df["path_id"].n_unique()
-    print(f"Loaded {df.height:,} rows across {n_paths} paths")
+data_dir = Path("simulation_output")
+output_dir = Path("report/figures")
 
-    agg = df.group_by("time").agg([
-        pl.col("mid_price").mean().alias("mid_mean"),
-        pl.col("mid_price").std().alias("mid_std"),
-        pl.col("inventory").mean().alias("inv_mean"),
-        pl.col("inventory").std().alias("inv_std"),
-        pl.col("pnl").mean().alias("pnl_mean"),
-        pl.col("pnl").std().alias("pnl_std"),
-    ]).sort("time")
+strategies = [("simulation_output/results_AS.json", "Avellaneda-Stoikov"),
+              ("simulation_output/results_LS.json", "Linear Skew"),
+              ("simulation_output/results_FS.json", "Fixed Spreads")]
 
-    t = agg["time"].to_numpy()
-    mid_mean = agg["mid_mean"].to_numpy()
-    mid_std  = agg["mid_std"].to_numpy()
-    inv_mean = agg["inv_mean"].to_numpy()
-    inv_std  = agg["inv_std"].to_numpy()
-    pnl_mean = agg["pnl_mean"].to_numpy()
-    pnl_std  = agg["pnl_std"].to_numpy()
+def plot_pnl_violins(data: list[dict]):
+    strategies = [d["strategy"] for d in data]
+    terminal_pnl = [np.asarray(d["terminal_pnl_values"], dtype=float) for d in data]
 
-    terminal = df.filter(pl.col("time") == pl.col("time").max())
-    terminal_pnl = terminal["pnl"].to_numpy()
+    fig, ax = plt.subplots(figsize=(12,6))
+    vp = ax.violinplot(
+        terminal_pnl,
+        showmeans=False,
+        showmedians=False,
+        showextrema=False,
+        widths=0.9,
+    )
+    palette = sns.color_palette("husl", len(terminal_pnl))
+    for body, color in zip(vp["bodies"], palette):
+        body.set_facecolor(color)
+        body.set_edgecolor("#4a4a4a")
+        body.set_linewidth(0.7)
+        body.set_alpha(0.9)
 
-    z95 = 1.96
+    quantiles = np.array([np.percentile(arr, [2.5, 25, 50, 75, 97.5]) for arr in terminal_pnl])
+    vline_edges = np.array([np.percentile(arr, [1, 99]) for arr in terminal_pnl])
+    xs = np.arange(1, len(terminal_pnl) + 1)
+    for x, q, e in zip(xs, quantiles, vline_edges):
+        ax.vlines(x, e[0], e[1], color="#3a3a3a", linewidth=0.7, alpha=0.9)
+        hlines = ax.hlines([q[0], q[1], q[2], q[3], q[4]], 0, len(terminal_pnl) + 1, color="#3a3a3a", linewidth=0.7, linestyle="dashed")
+        patch = PathPatch(ax.collections[x-1].get_paths()[0], transform=ax.transData)
+        hlines.set_clip_path(patch) # clip the line by the form of the violin
 
-    # ── Sharpe ratio ──────────────────────────────────────────────────────
-    sharpe = terminal_pnl.mean() / terminal_pnl.std(ddof=1)
-    sharpe_se = np.sqrt((1 + 0.5 * sharpe**2) / n_paths)
-    sharpe_lo = sharpe - z95 * sharpe_se
-    sharpe_hi = sharpe + z95 * sharpe_se
+    ax.set_xticks(xs)
+    ax.set_xticklabels(strategies, fontsize=11)
+    ax.set_xlabel("Strategy", fontsize=13)
+    ax.set_xlim((0.4, len(terminal_pnl) + 0.60))
+    ax.set_ylabel("Terminal PnL", fontsize=13)
+    ax.set_title("Terminal PnL Distribution by Strategy", fontsize=15)
+    ax.set_axisbelow(True)
+    ax.grid(axis="y", alpha=0.8, linestyle="dashed")
+    plt.tight_layout()
 
-    # ── Terminal PnL statistics ───────────────────────────────────────────
-    term_mean = terminal_pnl.mean()
-    term_std  = terminal_pnl.std(ddof=1)
-    term_ci   = z95 * term_std / np.sqrt(n_paths)
-    term_lo   = term_mean - term_ci
-    term_hi   = term_mean + term_ci
+def plot_risk_vs_reward(data: list[dict]):
+    strategies = [d["strategy"] for d in data]
+    rewards = [d["terminal_pnl"]["mean"] for d in data]
+    risks = [d["terminal_pnl"]["stddev"] for d in data] # Potential could change it from var to stddev to make the x and y axis have the same "units"
 
-    print(f"Sharpe ratio : {sharpe:.4f}  (95% CI: [{sharpe_lo:.4f}, {sharpe_hi:.4f}])")
-    print(f"Terminal PnL  : {term_mean:.4f} ± {term_ci:.4f}  (95% CI: [{term_lo:.4f}, {term_hi:.4f}])")
-    print(f"Terminal PnL std : {term_std:.4f}")
+    fig, ax = plt.subplots(figsize=(12, 6))
 
-    # ── Plot ──────────────────────────────────────────────────────────────
-    se = lambda std: z95 * std / np.sqrt(n_paths)
+    palette = sns.color_palette("husl", len(strategies))
+    for i, (x, y, label) in enumerate(zip(risks, rewards, strategies)):
+        ax.scatter(x, y, color=palette[i], s=100, label=label)
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    ax.legend()
 
-    c_mid = sns.color_palette()[0]
-    c_inv = sns.color_palette()[1]
-    c_pnl = sns.color_palette()[2]
-
-    # ── Mid Price ─────────────────────────────────────────────────────
-    ax = axes[0, 0]
-    # ax.fill_between(t, mid_mean - mid_std, mid_mean + mid_std,
-    #                 alpha=0.12, color=c_mid)
-    sns.lineplot(x=t, y=mid_mean, linewidth=1.5, color=c_mid, ax=ax)
-    ax.set_ylabel("Mid Price")
-    # ax.set_ylim([99, 101])
-    # ax.set_title("Mid Price (mean ± 1σ)")
-
-    # ── Inventory ─────────────────────────────────────────────────────
-    ax = axes[0, 1]
-    # ax.fill_between(t, inv_mean - inv_std, inv_mean + inv_std,
-    #                 alpha=0.12, color=c_inv)
-    sns.lineplot(x=t, y=inv_mean, linewidth=1.5, color=c_inv, ax=ax)
-    ax.axhline(y=0, color="gray", linestyle="--", linewidth=0.8, alpha=0.6)
-    ax.set_ylabel("Inventory")
-    ax.set_title("Inventory (mean)")
-
-    # ── PnL trajectory ────────────────────────────────────────────────
-    ax = axes[1, 0]
-    ax.fill_between(t, pnl_mean - pnl_std, pnl_mean + pnl_std,
-                    alpha=0.10, color=c_pnl, label="±1σ range")
-    ax.fill_between(t, pnl_mean - se(pnl_std), pnl_mean + se(pnl_std),
-                    alpha=0.35, color=c_pnl, label="95% CI of mean")
-    sns.lineplot(x=t, y=pnl_mean, linewidth=1.5, color=c_pnl, ax=ax)
-    ax.set_ylabel("PnL")
-    ax.set_xlabel("Time")
-    ax.set_title("PnL Trajectory")
-    ax.legend(fontsize=8, loc="upper left")
-
-    # ── Terminal PnL distribution ─────────────────────────────────────
-    ax = axes[1, 1]
-    sns.histplot(terminal_pnl, bins=59, stat="density", alpha=0.5,
-                 color=sns.color_palette()[3], edgecolor="white", ax=ax)
-    sns.kdeplot(terminal_pnl, linewidth=2, color=sns.color_palette()[3], ax=ax)
-    ax.axvline(x=0, color="gray", linestyle="--", linewidth=1.0, alpha=0.6)
-    ax.axvline(x=term_mean, color="black", linewidth=1.8,
-               label=f"mean = {term_mean:.3f}")
-    ax.axvline(x=term_lo, color="black", linestyle=":", linewidth=1.2,
-               label=f"95% CI [{term_lo:.3f}, {term_hi:.3f}]")
-    ax.axvline(x=term_hi, color="black", linestyle=":", linewidth=1.2)
-    ax.set_xlabel("Terminal PnL")
-    ax.set_ylabel("Density")
-    ax.set_title(f"Terminal PnL Distribution (n={n_paths:,}, Sharpe={sharpe:.3f})")
-    ax.legend(fontsize=8, loc="upper right")
-
-    for ax in axes.flat:
-        ax.grid(True, alpha=0.3)
+    ax.set_xlabel("Standard Deviation of PnL", fontsize=13)
+    ax.set_ylabel("Mean of PnL", fontsize=13)
+    ax.set_title("Risk vs Reward", fontsize=15)
 
     plt.tight_layout()
-    plt.show()
+
+def plot_max_abs_inventory_violins(data: list[dict]):
+    strategies = [d["strategy"] for d in data]
+    terminal_pnl = [np.asarray(d["max_abs_inventory_values"], dtype=float) for d in data]
+
+    fig, ax = plt.subplots(figsize=(12,6))
+    vp = ax.violinplot(
+        terminal_pnl,
+        showmeans=False,
+        showmedians=False,
+        showextrema=False,
+        widths=0.9,
+    )
+    palette = sns.color_palette("husl", len(terminal_pnl))
+    for body, color in zip(vp["bodies"], palette):
+        body.set_facecolor(color)
+        body.set_edgecolor("#4a4a4a")
+        body.set_linewidth(0.7)
+        body.set_alpha(0.9)
+
+    quantiles = np.array([np.percentile(arr, [2.5, 25, 50, 75, 97.5]) for arr in terminal_pnl])
+    vline_edges = np.array([np.percentile(arr, [1, 99]) for arr in terminal_pnl])
+    xs = np.arange(1, len(terminal_pnl) + 1)
+    for x, q, e in zip(xs, quantiles, vline_edges):
+        ax.vlines(x, e[0], e[1], color="#3a3a3a", linewidth=0.7, alpha=0.9)
+        hlines = ax.hlines([q[0], q[1], q[2], q[3], q[4]], 0, len(terminal_pnl) + 1, color="#3a3a3a", linewidth=0.7, linestyle="dashed")
+        patch = PathPatch(ax.collections[x-1].get_paths()[0], transform=ax.transData)
+        hlines.set_clip_path(patch) # clip the line by the form of the violin
+
+    ax.set_xticks(xs)
+    ax.set_yticks(np.arange(0, 31))
+    ax.set_yticklabels([(str(i) if i%5 == 0 else "") for i in range(31)])
+    ax.set_xticklabels(strategies, fontsize=11)
+    ax.set_xlim((0.4, len(terminal_pnl) + 0.60))
+    ax.set_xlabel("Strategy", fontsize=13)
+    ax.set_ylabel("Max Inventory", fontsize=13)
+    ax.set_ylim((0, 30))
+    ax.set_title("Max Inventory Distribution by Strategy", fontsize=15)
+    ax.set_axisbelow(True)
+    ax.grid(axis="y", alpha=0.8, linestyle="dashed")
+    plt.tight_layout()
+
+def plot_mean_abs_inventory_violins(data: list[dict]):
+    strategies = [d["strategy"] for d in data]
+    terminal_pnl = [np.asarray(d["mean_abs_inventory_values"], dtype=float) for d in data]
+
+    fig, ax = plt.subplots(figsize=(12,6))
+    vp = ax.violinplot(
+        terminal_pnl,
+        showmeans=False,
+        showmedians=False,
+        showextrema=False,
+        widths=0.9,
+    )
+    palette = sns.color_palette("husl", len(terminal_pnl))
+    for body, color in zip(vp["bodies"], palette):
+        body.set_facecolor(color)
+        body.set_edgecolor("#4a4a4a")
+        body.set_linewidth(0.7)
+        body.set_alpha(0.9)
+
+    quantiles = np.array([np.percentile(arr, [2.5, 25, 50, 75, 97.5]) for arr in terminal_pnl])
+    vline_edges = np.array([np.percentile(arr, [1, 99]) for arr in terminal_pnl])
+    xs = np.arange(1, len(terminal_pnl) + 1)
+    for x, q, e in zip(xs, quantiles, vline_edges):
+        ax.vlines(x, e[0], e[1], color="#3a3a3a", linewidth=0.7, alpha=0.9)
+        hlines = ax.hlines([q[0], q[1], q[2], q[3], q[4]], 0, len(terminal_pnl) + 1, color="#3a3a3a", linewidth=0.7, linestyle="dashed")
+        patch = PathPatch(ax.collections[x-1].get_paths()[0], transform=ax.transData)
+        hlines.set_clip_path(patch) # clip the line by the form of the violin
+
+    ax.set_xticks(xs)
+    ax.set_yticks(np.arange(0, 19))
+    ax.set_yticklabels([(str(i) if i%5 == 0 else "") for i in range(19)])
+    ax.set_xticklabels(strategies, fontsize=11)
+    ax.set_xlim((0.4, len(terminal_pnl) + 0.60))
+    ax.set_xlabel("Strategy", fontsize=13)
+    ax.set_ylabel("Mean Inventory", fontsize=13)
+    ax.set_ylim((0, 18))
+    ax.set_title("Mean Inventory Distribution by Strategy", fontsize=15)
+    ax.set_axisbelow(True)
+    ax.grid(axis="y", alpha=0.8, linestyle="dashed")
+    plt.tight_layout()
+
+def sharpe_ratio(samples: np.ndarray) -> float:
+    """Compute Sharpe ratio with guards against overflow/invalid variance math."""
+    arr = np.asarray(samples, dtype=np.float64).ravel()
+    arr = arr[np.isfinite(arr)]
+
+    if arr.size < 2:
+        return 0.0
+
+    mean = float(np.mean(arr))
+    centered = arr - mean
+    scale = float(np.max(np.abs(centered)))
+
+    if scale == 0.0:
+        return 0.0
+
+    std = float(np.sqrt(np.mean((centered / scale) ** 2)) * scale)
+    if not np.isfinite(std) or std <= 0.0:
+        return 0.0
+
+    sharpe = mean / std
+    if not np.isfinite(sharpe):
+        return 0.0
+
+    return float(sharpe)
+
+def bootstrap_sharpe_test(data: list[dict], n_boot: int = 10_000):
+    """
+    Pairwise bootstrap test: is Sharpe(A) > Sharpe(B)?
+    For each pair (A, B), resample terminal PnL with replacement 10,000 times,
+    compute the Sharpe difference, and estimate the p-value.
+    """
+    pairs = []
+    for i in range(len(data)):
+        for j in range(i + 1, len(data)):
+            pairs.append((i, j))
+
+    if not pairs:
+        return None
+
+    results = {}
+    rng = np.random.default_rng(42)
+
+    for ia, ib in pairs:
+        pnl_a = np.asarray(data[ia]["terminal_pnl_values"], dtype=np.float64)
+        pnl_b = np.asarray(data[ib]["terminal_pnl_values"], dtype=np.float64)
+        pnl_a = pnl_a[np.isfinite(pnl_a)]
+        pnl_b = pnl_b[np.isfinite(pnl_b)]
+
+        if pnl_a.size == 0 or pnl_b.size == 0:
+            continue
+
+        n_a = pnl_a.size
+        n_b = pnl_b.size
+
+        diffs = np.empty(n_boot, dtype=np.float64)
+        for k in range(n_boot):
+            idx_a = rng.integers(0, n_a, size=n_a)
+            idx_b = rng.integers(0, n_b, size=n_b)
+            sharpe_a = sharpe_ratio(pnl_a[idx_a])
+            sharpe_b = sharpe_ratio(pnl_b[idx_b])
+            diffs[k] = sharpe_a - sharpe_b
+
+        p_a_gt_b = np.mean(diffs > 0)
+        p_b_gt_a = np.mean(diffs < 0)
+
+        results[(ia, ib)] = {
+            "diffs": diffs,
+            "p_A_gt_B": p_a_gt_b,
+            "p_B_gt_A": p_b_gt_a,
+            "name_A": data[ia]["strategy"],
+            "name_B": data[ib]["strategy"],
+        }
+
+        name_a = data[ia]["strategy"]
+        name_b = data[ib]["strategy"]
+        if p_a_gt_b > p_b_gt_a:
+            print(f"  {name_a} > {name_b}:  p = {p_b_gt_a:.4f}  (B = {n_boot:,})")
+        else:
+            print(f"  {name_b} > {name_a}:  p = {p_a_gt_b:.4f}  (B = {n_boot:,})")
+
+    return results
+
+# def plot_bootstrap_hists(boot_results: dict | None, output_dir: Path):
+#     """Histograms of bootstrap Sharpe differences — one figure per pair."""
+#     if not boot_results:
+#         return
+#
+#     for (pair, res) in boot_results.items():
+#         diffs = res["diffs"]
+#         p_a_gt = res["p_A_gt_B"]
+#         p_b_gt = res["p_B_gt_A"]
+#         dominant = res["name_A"] if p_a_gt > p_b_gt else res["name_B"]
+#         p_val = min(p_a_gt, p_b_gt)
+#
+#         fig, ax = plt.subplots(figsize=(8, 5))
+#         ax.hist(diffs, bins=80, density=True, alpha=0.6, color="steelblue",
+#                 edgecolor="white", linewidth=0.5)
+#         # ax.axvline(x=0, color="black", linestyle="--", linewidth=1.2)
+#         ax.set_xlabel(f"Sharpe({res['name_A']}) - Sharpe({res['name_B']})")
+#         ax.set_ylabel("Density")
+#         ax.set_title(f"{res['name_A']} vs {res['name_B']}\n"
+#                      f"{dominant} higher  (p = {p_val:.4f}, B = {len(diffs):,})",
+#                      fontsize=11)
+#
+#         # Annotate quantile of 0
+#         frac_below = np.mean(diffs < 0)
+#         ax.text(0.02, 0.92,
+#                 f"P(diff < 0) = {frac_below:.4f}\n"
+#                 f"P(diff > 0) = {1 - frac_below:.4f}",
+#                 transform=ax.transAxes, fontsize=9,
+#                 verticalalignment="top",
+#                 bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5))
+#
+#         fig.tight_layout()
+#         fname = output_dir / f"sharpe_bootstrap_{res['name_A']}_vs_{res['name_B']}.svg"
+#         fig.savefig(fname, bbox_inches="tight")
+#         plt.close(fig)
+
+def plot_bootstrap_hists(boot_results: dict | None, output_dir: Path):
+    """Histograms of bootstrap Sharpe differences — one figure per pair."""
+    if not boot_results:
+        return
+
+    for (pair, res) in boot_results.items():
+        diffs = res["diffs"]
+        p_a_gt = res["p_A_gt_B"]
+        p_b_gt = res["p_B_gt_A"]
+        dominant = res["name_A"] if p_a_gt > p_b_gt else res["name_B"]
+        p_val = min(p_a_gt, p_b_gt)
+
+        fig, ax = plt.subplots(figsize=(4, 5))
+        ax.hist(diffs, bins=80, density=True, alpha=0.6, color="steelblue",
+                edgecolor="white", linewidth=0.5)
+        # ax.axvline(x=0, color="black", linestyle="--", linewidth=1.2)
+        ax.set_xlabel(f"Sharpe({res['name_A']})\n - Sharpe({res['name_B']})", fontsize=13)
+        ax.set_ylabel("Density", fontsize=13)
+        ax.set_title(f"{res['name_A']} vs {res['name_B']}",
+                     # f"{dominant} higher  (p = {p_val:.4f}, B = {len(diffs):,})",
+                     fontsize=13)
+
+        fig.tight_layout()
+        fname = output_dir / f"sharpe_bootstrap_{res['name_A']}_vs_{res['name_B']}.svg"
+        fig.savefig(fname, bbox_inches="tight")
+        plt.close(fig)
+
+if __name__ == "__main__":
+    data = [load_results(results_file) for results_file, _ in strategies]
+    plot_pnl_violins(data)
+    plt.savefig("report/figures/pnl_violins.svg")
+    plot_risk_vs_reward(data)
+    plt.savefig("report/figures/risk_vs_reward.svg")
+    plot_max_abs_inventory_violins(data)
+    plt.savefig("report/figures/max_abs_inv_violins.svg")
+    plot_mean_abs_inventory_violins(data)
+    plt.savefig("report/figures/mean_abs_inv_violins.svg")
+    # bootstrap_results = bootstrap_sharpe_test(data, 100_000)
+    # plot_bootstrap_hists(bootstrap_results, output_dir)

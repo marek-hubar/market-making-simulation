@@ -21,7 +21,7 @@ def plot_pnl_violins(data: list[dict]):
     strategies = [d["strategy"] for d in data]
     terminal_pnl = [np.asarray(d["terminal_pnl_values"], dtype=float) for d in data]
 
-    fig, ax = plt.subplots(figsize=(12,6))
+    fig, ax = plt.subplots(figsize=(8,4))
     vp = ax.violinplot(
         terminal_pnl,
         showmeans=False,
@@ -60,13 +60,11 @@ def plot_risk_vs_reward(data: list[dict]):
     rewards = [d["terminal_pnl"]["mean"] for d in data]
     risks = [d["terminal_pnl"]["stddev"] for d in data] # Potential could change it from var to stddev to make the x and y axis have the same "units"
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(8, 4))
 
     palette = sns.color_palette("husl", len(strategies))
     for i, (x, y, label) in enumerate(zip(risks, rewards, strategies)):
         ax.scatter(x, y, color=palette[i], s=100, label=label)
-
-    ax.legend()
 
     ax.set_xlabel("Standard Deviation of PnL", fontsize=13)
     ax.set_ylabel("Mean of PnL", fontsize=13)
@@ -78,7 +76,7 @@ def plot_max_abs_inventory_violins(data: list[dict]):
     strategies = [d["strategy"] for d in data]
     terminal_pnl = [np.asarray(d["max_abs_inventory_values"], dtype=float) for d in data]
 
-    fig, ax = plt.subplots(figsize=(12,6))
+    fig, ax = plt.subplots(figsize=(8,4))
     vp = ax.violinplot(
         terminal_pnl,
         showmeans=False,
@@ -119,7 +117,7 @@ def plot_mean_abs_inventory_violins(data: list[dict]):
     strategies = [d["strategy"] for d in data]
     terminal_pnl = [np.asarray(d["mean_abs_inventory_values"], dtype=float) for d in data]
 
-    fig, ax = plt.subplots(figsize=(12,6))
+    fig, ax = plt.subplots(figsize=(8,4))
     vp = ax.violinplot(
         terminal_pnl,
         showmeans=False,
@@ -238,42 +236,6 @@ def bootstrap_sharpe_test(data: list[dict], n_boot: int = 10_000):
 
     return results
 
-# def plot_bootstrap_hists(boot_results: dict | None, output_dir: Path):
-#     """Histograms of bootstrap Sharpe differences — one figure per pair."""
-#     if not boot_results:
-#         return
-#
-#     for (pair, res) in boot_results.items():
-#         diffs = res["diffs"]
-#         p_a_gt = res["p_A_gt_B"]
-#         p_b_gt = res["p_B_gt_A"]
-#         dominant = res["name_A"] if p_a_gt > p_b_gt else res["name_B"]
-#         p_val = min(p_a_gt, p_b_gt)
-#
-#         fig, ax = plt.subplots(figsize=(8, 5))
-#         ax.hist(diffs, bins=80, density=True, alpha=0.6, color="steelblue",
-#                 edgecolor="white", linewidth=0.5)
-#         # ax.axvline(x=0, color="black", linestyle="--", linewidth=1.2)
-#         ax.set_xlabel(f"Sharpe({res['name_A']}) - Sharpe({res['name_B']})")
-#         ax.set_ylabel("Density")
-#         ax.set_title(f"{res['name_A']} vs {res['name_B']}\n"
-#                      f"{dominant} higher  (p = {p_val:.4f}, B = {len(diffs):,})",
-#                      fontsize=11)
-#
-#         # Annotate quantile of 0
-#         frac_below = np.mean(diffs < 0)
-#         ax.text(0.02, 0.92,
-#                 f"P(diff < 0) = {frac_below:.4f}\n"
-#                 f"P(diff > 0) = {1 - frac_below:.4f}",
-#                 transform=ax.transAxes, fontsize=9,
-#                 verticalalignment="top",
-#                 bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5))
-#
-#         fig.tight_layout()
-#         fname = output_dir / f"sharpe_bootstrap_{res['name_A']}_vs_{res['name_B']}.svg"
-#         fig.savefig(fname, bbox_inches="tight")
-#         plt.close(fig)
-
 def plot_bootstrap_hists(boot_results: dict | None, output_dir: Path):
     """Histograms of bootstrap Sharpe differences — one figure per pair."""
     if not boot_results:
@@ -301,6 +263,23 @@ def plot_bootstrap_hists(boot_results: dict | None, output_dir: Path):
         fig.savefig(fname, bbox_inches="tight")
         plt.close(fig)
 
+def plot_mean_abs_inventory(data: list[dict]):
+    strategies = [d["strategy"] for d in data]
+    abs_inventories = [np.asarray(d["abs_inventory_over_time_mean"], dtype=float) for d in data]
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    palette = sns.color_palette("husl", len(strategies))
+
+    xs = np.linspace(0, 1, len(abs_inventories[0]))
+    for abs_inventory_ts, label, color in zip(abs_inventories, strategies, palette):
+        ax.plot(xs, abs_inventory_ts, color=color, label=label, linewidth=2.0)
+
+    ax.set_xlabel("Time", fontsize=13)
+    ax.set_ylabel("Mean inventory", fontsize=13)
+    ax.set_title("Mean inventory time series", fontsize=15)
+    ax.legend()
+    fig.tight_layout()
+
 if __name__ == "__main__":
     data = [load_results(results_file) for results_file, _ in strategies]
     plot_pnl_violins(data)
@@ -313,3 +292,6 @@ if __name__ == "__main__":
     plt.savefig("report/figures/mean_abs_inv_violins.svg")
     # bootstrap_results = bootstrap_sharpe_test(data, 100_000)
     # plot_bootstrap_hists(bootstrap_results, output_dir)
+
+    plot_mean_abs_inventory(data)
+    plt.savefig("report/figures/mean_abs_inv_ts.svg")

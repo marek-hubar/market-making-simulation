@@ -50,11 +50,14 @@ int main(int argc, char* argv[]) {
     // ── Strategy 1: Avellaneda-Stoikov ────────────────────────────────────────
     {
         AvellanedaStoikovAgent agent(cfg);
-        auto results = simulator.run_all(agent);
-        auto stats   = aggregate_paths(results);
+        auto sim_res = simulator.run_all(agent);
+        auto stats   = aggregate_paths(sim_res.path_summaries,
+                                       sim_res.time_points,
+                                       sim_res.abs_inv_mean,
+                                       sim_res.abs_inv_std);
         print_stats_summary(stats, "Avellaneda-Stoikov");
         write_stats_json("simulation_output/results_AS.json", stats, "Avellaneda-Stoikov",
-                         results);
+                         sim_res.path_summaries);
     }
 
     // ── Strategy 2: Fixed Spread ──────────────────────────────────────────────
@@ -63,11 +66,14 @@ int main(int argc, char* argv[]) {
             1.0 / cfg.gamma * std::log(1.0 + cfg.gamma / cfg.k)
             + cfg.gamma * cfg.sigma * cfg.sigma * cfg.T * 0.25;
         FixedSpreadAgent agent(optimal_fixed_half_spread);
-        auto results = simulator.run_all(agent);
-        auto stats   = aggregate_paths(results);
+        auto sim_res = simulator.run_all(agent);
+        auto stats   = aggregate_paths(sim_res.path_summaries,
+                                       sim_res.time_points,
+                                       sim_res.abs_inv_mean,
+                                       sim_res.abs_inv_std);
         print_stats_summary(stats, "FixedSpread");
         write_stats_json("simulation_output/results_FS.json", stats, "Fixed Spread",
-                         results);
+                         sim_res.path_summaries);
     }
 
     // ── Strategy 3: LinearSkew ────────────────────────────────────────────────
@@ -78,11 +84,14 @@ int main(int argc, char* argv[]) {
         // double base_spread = 1.0 / cfg.gamma * std::log(1.0 + cfg.gamma / cfg.k) + cfg.gamma * cfg.sigma * cfg.sigma * tau;
         // double linear_skew = std::sqrt(0.5 * cfg.gamma * cfg.k / cfg.A) * cfg.sigma;
         LinearSkewAgent agent(base_spread, linear_skew);
-        auto results = simulator.run_all(agent);
-        auto stats   = aggregate_paths(results);
+        auto sim_res = simulator.run_all(agent);
+        auto stats   = aggregate_paths(sim_res.path_summaries,
+                                       sim_res.time_points,
+                                       sim_res.abs_inv_mean,
+                                       sim_res.abs_inv_std);
         print_stats_summary(stats, "LinearSkew");
         write_stats_json("simulation_output/results_LS.json", stats, "Linear Skew",
-                         results);
+                         sim_res.path_summaries);
     }
 
     return 0;

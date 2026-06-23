@@ -6,6 +6,13 @@
 #include "Agent.hpp"
 #include "Statistics.hpp"
 
+struct SimulationResult {
+    std::vector<PathSummary> path_summaries;
+    std::vector<double> time_points;
+    std::vector<double> abs_inv_mean;
+    std::vector<double> abs_inv_std;
+};
+
 class Simulator {
 private:
     const Config& config_;
@@ -14,10 +21,12 @@ private:
     OrderArrivalModel arrival_model_;
     StatisticsCollector stats_;
 
-    PathSummary run_path(unsigned long seed, Agent& agent);
+    PathSummary run_path(unsigned long seed, Agent& agent,
+                         std::vector<double>* sum_abs = nullptr,
+                         std::vector<double>* sum_sq  = nullptr);
 
 public:
     Simulator(const Config& config);
     PathSummary run(Agent& agent);
-    std::vector<PathSummary> run_all(Agent& agent);
+    SimulationResult run_all(Agent& agent);
 };

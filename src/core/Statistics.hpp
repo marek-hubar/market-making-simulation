@@ -221,12 +221,19 @@ struct CrossPathStats {
     double sharpe_se          = 0.0;   // Lo (2002) standard error
     double sharpe_ci95_lower  = 0.0;
     double sharpe_ci95_upper  = 0.0;
+
+    std::vector<double> time_points;
+    std::vector<double> abs_inv_over_time_mean;
+    std::vector<double> abs_inv_over_time_std;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // aggregate_paths — cross-path aggregation
 // ─────────────────────────────────────────────────────────────────────────────
-inline CrossPathStats aggregate_paths(const std::vector<PathSummary>& paths) {
+inline CrossPathStats aggregate_paths(const std::vector<PathSummary>& paths,
+                                       const std::vector<double>& time_points = {},
+                                       const std::vector<double>& abs_inv_mean = {},
+                                       const std::vector<double>& abs_inv_std  = {}) {
     CrossPathStats cps;
 
     auto extract_d = [&](auto member) {
@@ -277,6 +284,10 @@ inline CrossPathStats aggregate_paths(const std::vector<PathSummary>& paths) {
     cps.sharpe_ci95_lower = cps.sharpe_ratio - z95 * cps.sharpe_se;
     cps.sharpe_ci95_upper = cps.sharpe_ratio + z95 * cps.sharpe_se;
 
+    cps.time_points          = time_points;
+    cps.abs_inv_over_time_mean = abs_inv_mean;
+    cps.abs_inv_over_time_std  = abs_inv_std;
+
     return cps;
 }
 
@@ -326,6 +337,30 @@ inline void write_stats_json(const std::string& filepath,
       << "  \"sharpe_se\": "          << s.sharpe_se          << ",\n"
       << "  \"sharpe_ci95\": ["      << s.sharpe_ci95_lower
                                     << ", " << s.sharpe_ci95_upper << "]";
+
+    if (!s.time_points.empty()) {
+        f << ",\n";
+        f << "  \"time_points\": [";
+        for (std::size_t i = 0; i < s.time_points.size(); ++i) {
+            if (i > 0) f << ", ";
+            f << s.time_points[i];
+        }
+        f << "],\n";
+
+        f << "  \"abs_inventory_over_time_mean\": [";
+        for (std::size_t i = 0; i < s.abs_inv_over_time_mean.size(); ++i) {
+            if (i > 0) f << ", ";
+            f << s.abs_inv_over_time_mean[i];
+        }
+        f << "],\n";
+
+        f << "  \"abs_inventory_over_time_std\": [";
+        for (std::size_t i = 0; i < s.abs_inv_over_time_std.size(); ++i) {
+            if (i > 0) f << ", ";
+            f << s.abs_inv_over_time_std[i];
+        }
+        f << "]";
+    }
 
     if (!paths.empty()) {
         f << ",\n";

@@ -6,16 +6,10 @@ import seaborn as sns
 
 from pathlib import Path
 
-def load_results(path: str) -> dict:
+def load_results(path: str | Path) -> dict:
     with open(path) as f:
         return json.load(f)
 
-data_dir = Path("simulation_output")
-output_dir = Path("report/figures")
-
-strategies = [("simulation_output/results_AS.json", "Avellaneda-Stoikov"),
-              ("simulation_output/results_LS.json", "Linear Skew"),
-              ("simulation_output/results_FS.json", "Fixed Spreads")]
 
 def plot_pnl_violins(data: list[dict]):
     strategies = [d["strategy"] for d in data]
@@ -281,17 +275,24 @@ def plot_mean_abs_inventory(data: list[dict]):
     fig.tight_layout()
 
 if __name__ == "__main__":
+    data_dir = Path("test")
+    output_dir = Path("test")
+
+    strategies = [(data_dir / "results_AS.json", "Avellaneda-Stoikov"),
+                  (data_dir / "results_LS.json", "Linear Skew"),
+                  (data_dir / "results_FS.json", "Fixed Spreads")]
+
     data = [load_results(results_file) for results_file, _ in strategies]
     plot_pnl_violins(data)
-    plt.savefig("report/figures/pnl_violins.svg")
+    plt.savefig(output_dir / "pnl_violins.svg")
     plot_risk_vs_reward(data)
-    plt.savefig("report/figures/risk_vs_reward.svg")
+    plt.savefig(output_dir / "risk_vs_reward.svg")
     plot_max_abs_inventory_violins(data)
-    plt.savefig("report/figures/max_abs_inv_violins.svg")
+    plt.savefig(output_dir / "max_abs_inv_violins.svg")
     plot_mean_abs_inventory_violins(data)
-    plt.savefig("report/figures/mean_abs_inv_violins.svg")
-    # bootstrap_results = bootstrap_sharpe_test(data, 100_000)
-    # plot_bootstrap_hists(bootstrap_results, output_dir)
+    plt.savefig(output_dir / "mean_abs_inv_violins.svg")
+    bootstrap_results = bootstrap_sharpe_test(data, 100_000)
+    plot_bootstrap_hists(bootstrap_results, output_dir)
 
     plot_mean_abs_inventory(data)
-    plt.savefig("report/figures/mean_abs_inv_ts.svg")
+    plt.savefig(output_dir / "mean_abs_inv_ts.svg")
